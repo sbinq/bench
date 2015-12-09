@@ -20,8 +20,8 @@ const (
 // Bench holds data to be used for benchmarking
 type Bench struct {
 	// values configured by the user
-	concurrentTasks int           // number of concurrent tasks
-	duration        time.Duration // benchmark duration
+	concurrentTasks int
+	duration        time.Duration
 	toBenchmark     func(int, int) time.Duration
 
 	// histogram for the benchmarking run
@@ -32,7 +32,6 @@ type Bench struct {
 	calls int
 	// time taken for the full run
 	timeTaken time.Duration
-	
 }
 
 // NewBench creates a new instance of Bench
@@ -81,9 +80,9 @@ func (b *Bench) Run() {
 	close(c)
 
 	// merge task specific data
-	for i:=0; i<b.concurrentTasks; i++{
+	for i := 0; i < b.concurrentTasks; i++ {
 		b.histogram.Merge(b.taskHistograms[i])
-		b.calls += <- c		
+		b.calls += <-c
 	}
 
 	b.timeTaken = time.Since(start)
@@ -95,10 +94,10 @@ func (b *Bench) String() string {
 	var buf bytes.Buffer
 	percentiles := []float64{50, 99.9, 100}
 
-	fmt.Fprintf(&buf, "%sDuration: %s, Concurrency: %d, Total runs: %s\n", prefix, b.duration, b.concurrentTasks, b.duration)
+	fmt.Fprintf(&buf, "Duration: %2.2f, Concurrency: %d, Total runs: %d\n", b.timeTaken.Seconds(), b.concurrentTasks, b.calls)
 	for _, p := range percentiles {
-		fmt.Fprintf(&buf, "%s%2.1fth percentile: %dns\n", prefix, p, b.histogram.ValueAtQuantile(p))
+		fmt.Fprintf(&buf, "%s%2.1fth percentile: %.2fms\n", prefix, p, float32(b.histogram.ValueAtQuantile(p))/1000000.0)
 	}
-	fmt.Fprintf(&buf, "%s%d calls in %.2fs\n", prefix, b.calls, b.duration.Seconds())	
+	fmt.Fprintf(&buf, "%s%d calls in %.2fs\n", prefix, b.calls, b.duration.Seconds())
 	return buf.String()
 }
