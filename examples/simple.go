@@ -7,9 +7,9 @@ import (
 	"time"
 )
 
-func f(id int, iter int) time.Duration {
+func f(c *bench.Context) {
 	time.Sleep(100 * time.Millisecond)
-	return time.Duration(iter) * time.Millisecond
+	c.RecordTime(time.Duration(c.Iteration) * time.Millisecond)
 }
 
 func main() {

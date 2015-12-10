@@ -20,31 +20,32 @@ const (
 // Bench holds data to be used for benchmarking
 type Bench struct {
 	// values configured by the user
-	concurrentTasks int
+	concurrentRuns int
 	duration        time.Duration
-	toBenchmark     func(int, int) time.Duration
+	toBenchmark     func(t *Context)
+
+	// context for individual runs
+	runContexts []*Context
 
 	// histogram for the benchmarking run
 	histogram *hdrhistogram.Histogram
-	// histograms for individual tasks
-	taskHistograms []*hdrhistogram.Histogram
 	// total calls made to each task
-	calls int
+	calls int64
 	// time taken for the full run
 	timeTaken time.Duration
 }
 
 // NewBench creates a new instance of Bench
-func NewBench(concurrentTasks int, duration time.Duration, toBenchmark func(int, int) time.Duration) *Bench {
+func NewBench(concurrency int, duration time.Duration, toBenchmark func(* Context)) *Bench {
 	b := &Bench{
-		concurrentTasks: concurrentTasks,
+		concurrentRuns: concurrency,
 		duration:        duration,
 		toBenchmark:     toBenchmark,
 		histogram:       hdrhistogram.New(min, max, resolution),
 	}
 
-	for i := 0; i < concurrentTasks; i++ {
-		b.taskHistograms = append(b.taskHistograms, hdrhistogram.New(min, max, resolution))
+	for i := 0; i < b.concurrentRuns; i++ {
+		b.runContexts = append(b.runContexts, newContext(i+1))
 	}
 
 	return b
@@ -54,35 +55,32 @@ func NewBench(concurrentTasks int, duration time.Duration, toBenchmark func(int,
 func (b *Bench) Run() {
 	var wg sync.WaitGroup
 	start := time.Now()
-	c := make(chan int, b.concurrentTasks)
+
 	ctx, _ := context.WithTimeout(context.Background(), b.duration)
 
-	for i := 1; i <= b.concurrentTasks; i++ {
+	for i := 1; i <= b.concurrentRuns; i++ {
 		wg.Add(1)
-
-		go func(ctx context.Context, c chan int, histogram *hdrhistogram.Histogram) {
+		go func(ctx context.Context, runContext *Context) {
 			defer wg.Done()
 
 			for j := 1; ; j++ {
+				runContext.Iteration = int64(j)
 				select {
 				case <-ctx.Done():
-					c <- j
 					return
 				default:
-					timeTaken := b.toBenchmark(i, j)
-					histogram.RecordValue(timeTaken.Nanoseconds())
+					b.toBenchmark(runContext)				
 				}
 			}
-		}(ctx, c, b.taskHistograms[i-1])
+		}(ctx, b.runContexts[i-1])
 	}
 
 	wg.Wait()
-	close(c)
 
 	// merge task specific data
-	for i := 0; i < b.concurrentTasks; i++ {
-		b.histogram.Merge(b.taskHistograms[i])
-		b.calls += <-c
+	for i := 0; i < b.concurrentRuns; i++ {
+		b.histogram.Merge(b.runContexts[i].histogram)
+		b.calls += b.runContexts[i].Iteration
 	}
 
 	b.timeTaken = time.Since(start)
@@ -94,10 +92,10 @@ func (b *Bench) String() string {
 	var buf bytes.Buffer
 	percentiles := []float64{50, 99.9, 100}
 
-	fmt.Fprintf(&buf, "Duration: %2.2f, Concurrency: %d, Total runs: %d\n", b.timeTaken.Seconds(), b.concurrentTasks, b.calls)
+	fmt.Fprintf(&buf, "Duration: %2.2fs, Concurrency: %d, Total runs: %d\n", b.timeTaken.Seconds(), b.concurrentRuns, b.calls)
 	for _, p := range percentiles {
 		fmt.Fprintf(&buf, "%s%2.1fth percentile: %.2fms\n", prefix, p, float32(b.histogram.ValueAtQuantile(p))/1000000.0)
 	}
-	fmt.Fprintf(&buf, "%s%d calls in %.2fs\n", prefix, b.calls, b.duration.Seconds())
+	fmt.Fprintf(&buf, "%s%d calls in %.2fs\n", prefix, b.calls, b.timeTaken.Seconds())
 	return buf.String()
 }

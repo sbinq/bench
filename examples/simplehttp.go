@@ -7,14 +7,14 @@ import (
 	"time"
 )
 
-func f(id int, iter int) time.Duration {
+func f(c *bench.Context) {
 	start := time.Now()
 	resp, err := http.Get("http://www.flipkart.com")
 	if err != nil {
 		fmt.Printf("Error %s", err)
 	}
 	defer resp.Body.Close()
-	return time.Since(start)
+	c.RecordTime(time.Since(start))
 }
 
 func main() {
