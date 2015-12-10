@@ -11,7 +11,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-// Bench holds data to be used for benchmarking
+// Bench holds data to be used for benchmarking. It can perform aggresively wherein it repeatedly sends calls the benchmarking function, or it can perform a uniform bench wherein it can invoke the benchmarking function at a uniform rate.
 type Bench struct {
 	// values configured by the user
 	concurrentRuns int

@@ -1,22 +1,22 @@
 package bench
 
 import (
+	"bytes"
 	"fmt"
 	"time"
-	"bytes"
-	
+
 	"github.com/codahale/hdrhistogram"
 )
 
 // Context for each benchmarking run
 type Context struct {
-	ID int
+	ID        int
 	Iteration int64
 	histogram *hdrhistogram.Histogram
 }
 
 func newContext(id int) *Context {
-	t := Context{ID:id}
+	t := Context{ID: id}
 	t.histogram = hdrhistogram.New(min, max, resolution)
 	return &t
 }
