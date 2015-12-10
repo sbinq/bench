@@ -1,5 +1,5 @@
 
-# Bench 
+# Bench [![Build Status](https://travis-ci.org/chirayu/bench.svg?branch=master)](https://travis-ci.org/chirayu/bench)
 
 **Bench** is a golang package to help speed up benchmarking projects. You can use it to do a quick benchmark of your database, queue or http server.
 
