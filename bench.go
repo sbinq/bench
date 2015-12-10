@@ -11,18 +11,12 @@ import (
 	"golang.org/x/net/context"
 )
 
-const (
-	min        = 0
-	max        = 100 * 1000 * 1000 * 1000 // upto 10 seconds
-	resolution = 3
-)
-
 // Bench holds data to be used for benchmarking
 type Bench struct {
 	// values configured by the user
 	concurrentRuns int
-	duration        time.Duration
-	toBenchmark     func(t *Context)
+	duration       time.Duration
+	toBenchmark    func(t *Context)
 
 	// context for individual runs
 	runContexts []*Context
@@ -36,12 +30,12 @@ type Bench struct {
 }
 
 // NewBench creates a new instance of Bench
-func NewBench(concurrency int, duration time.Duration, toBenchmark func(* Context)) *Bench {
+func NewBench(concurrency int, duration time.Duration, toBenchmark func(*Context)) *Bench {
 	b := &Bench{
 		concurrentRuns: concurrency,
-		duration:        duration,
-		toBenchmark:     toBenchmark,
-		histogram:       hdrhistogram.New(min, max, resolution),
+		duration:       duration,
+		toBenchmark:    toBenchmark,
+		histogram:      hdrhistogram.New(min, max, resolution),
 	}
 
 	for i := 0; i < b.concurrentRuns; i++ {
@@ -69,7 +63,7 @@ func (b *Bench) Run() {
 				case <-ctx.Done():
 					return
 				default:
-					b.toBenchmark(runContext)				
+					b.toBenchmark(runContext)
 				}
 			}
 		}(ctx, b.runContexts[i-1])
