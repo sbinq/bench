@@ -11,12 +11,17 @@ import (
 	"golang.org/x/net/context"
 )
 
-// Bench holds data to be used for benchmarking. It can perform aggresively wherein it repeatedly sends calls the benchmarking function, or it can perform a uniform bench wherein it can invoke the benchmarking function at a uniform rate.
+// benchmarking function
+type benchmarkFn func(t *Context)
+
+// Bench holds data to be used for benchmarking.
+// It can perform aggresively wherein it repeatedly sends calls the benchmarking function, or it can perform a uniform bench wherein it can invoke the benchmarking function at a uniform rate.
 type Bench struct {
 	// values configured by the user
 	concurrentRuns int
 	duration       time.Duration
-	toBenchmark    func(t *Context)
+	fn             benchmarkFn
+	rps            int
 
 	// context for individual runs
 	runContexts []*Context
@@ -32,11 +37,12 @@ type Bench struct {
 }
 
 // NewBench creates a new instance of Bench
-func NewBench(concurrency int, duration time.Duration, toBenchmark func(*Context)) *Bench {
+func NewBench(concurrency int, duration time.Duration, rps int, fn benchmarkFn) *Bench {
 	b := &Bench{
 		concurrentRuns: concurrency,
 		duration:       duration,
-		toBenchmark:    toBenchmark,
+		fn:             fn,
+		rps:            rps,
 	}
 
 	b.timers = make(map[string]*hdrhistogram.Histogram)
@@ -51,88 +57,30 @@ func NewBench(concurrency int, duration time.Duration, toBenchmark func(*Context
 
 // Run the benchmark
 func (b *Bench) Run() {
-
 	// Only run it once
 	if b.calls != 0 {
 		return
 	}
 
 	var wg sync.WaitGroup
-	start := time.Now()
-
+	var ts *TokenStream
 	ctx, _ := context.WithTimeout(context.Background(), b.duration)
 
-	for i := 1; i <= b.concurrentRuns; i++ {
-		go func(ctx context.Context, runContext *Context) {
-			wg.Add(1)
-			defer wg.Done()
-
-			for j := 1; ; j++ {
-				select {
-				case <-ctx.Done():
-					return
-				default:
-					runContext.Iteration = int64(j)
-					b.toBenchmark(runContext)
-				}
-			}
-		}(ctx, b.runContexts[i-1])
+	if b.rps > 0 {
+		ts = NewTokenStream(b.rps)
+		defer ts.Stop()
 	}
-
-	wg.Wait()
-	b.timeTaken = time.Since(start)
-
-	b.aggregate()
-}
-
-// UniformRun calls the function at the specified rate
-func (b *Bench) UniformRun(rps int) {
-
-	// Only run it once
-	if b.calls != 0 {
-		return
-	}
-
-	var wg sync.WaitGroup
-	tokens := make(chan bool, 10*rps)
-	defer close(tokens)
-
-	ctx, _ := context.WithTimeout(context.Background(), b.duration)
-	ticker := time.NewTicker(time.Second / time.Duration(rps))
-	defer ticker.Stop()
-
-	start := time.Now()
-
-	// generate a queue of events for consumption by the runs
-	go func(ctx context.Context, ticker *time.Ticker) {
-		wg.Add(1)
-		defer wg.Done()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				tokens <- true
-			}
-		}
-	}(ctx, ticker)
 
 	// start the runs
+	start := time.Now()
 	for i := 1; i <= b.concurrentRuns; i++ {
-		wg.Add(1)
-		go func(ctx context.Context, runContext *Context) {
-			defer wg.Done()
-
-			for j := 1; ; j++ {
-				select {
-				case <-ctx.Done():
-					return
-				case <-tokens:
-					runContext.Iteration = int64(j)
-					b.toBenchmark(runContext)
-				}
-			}
-		}(ctx, b.runContexts[i-1])
+		if b.rps > 0 {
+			wg.Add(1)
+			go onToken(ctx, b.runContexts[i-1], &wg, ts, b.fn)
+		} else {
+			wg.Add(1)
+			go continuous(ctx, b.runContexts[i-1], &wg, b.fn)
+		}
 	}
 
 	wg.Wait()
@@ -170,14 +118,14 @@ func (b *Bench) aggregate() {
 func (b *Bench) String() string {
 	prefix := "  "
 	var buf bytes.Buffer
-	percentiles := []float64{50, 99.9, 100}
+	percentiles := []float64{5, 50, 99.9, 100}
 
 	fmt.Fprintf(&buf, "Duration: %2.2fs, Concurrency: %d, Total runs: %d\n", b.timeTaken.Seconds(), b.concurrentRuns, b.calls)
 
 	for n, h := range b.timers {
 		fmt.Fprintf(&buf, "%s>>Timer: %s \n", prefix, n)
 		for _, p := range percentiles {
-			fmt.Fprintf(&buf, "%s%s%2.1fth percentile: %.2fms\n", prefix, prefix, p, float32(h.ValueAtQuantile(p))/1000000.0)
+			fmt.Fprintf(&buf, "%s%s%2.1fth percentile: %.2fms\n", prefix, prefix, p, float64(h.ValueAtQuantile(p))/1000000)
 		}
 	}
 	for n, count := range b.counters {
@@ -185,4 +133,34 @@ func (b *Bench) String() string {
 		fmt.Fprintf(&buf, "%s%sValue: %d \n", prefix, prefix, count)
 	}
 	return buf.String()
+}
+
+// continuous invokes the benchmarking function continously
+// unlike onToken, it doesn't read from a token stream to minimise the overhead of creating and populating a channel
+func continuous(ctx context.Context, runContext *Context, wg *sync.WaitGroup, fn benchmarkFn) {
+	defer wg.Done()
+
+	for j := 1; ; j++ {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			runContext.Iteration = int64(j)
+			fn(runContext)			
+		}
+	}
+}
+
+// onToken invokes the benchmarking function whenever it gets a token
+func onToken(ctx context.Context, runContext *Context, wg *sync.WaitGroup, ts *TokenStream, fn benchmarkFn) {
+	defer wg.Done()
+	for j := 1; ; j++ {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ts.S:
+			runContext.Iteration = int64(j)
+			fn(runContext)
+		}
+	}
 }
