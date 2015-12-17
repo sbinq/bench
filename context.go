@@ -12,18 +12,32 @@ import (
 type Context struct {
 	ID        int
 	Iteration int64
-	histogram *hdrhistogram.Histogram
+	timers    map[string]*hdrhistogram.Histogram
+	counters  map[string]int64
+
+	// user values
+	Values map[string]interface{}
 }
 
 func newContext(id int) *Context {
-	t := Context{ID: id}
-	t.histogram = hdrhistogram.New(min, max, resolution)
-	return &t
+	c := Context{ID: id}
+	c.timers = make(map[string]*hdrhistogram.Histogram)
+	c.counters = make(map[string]int64)
+	c.Values = make(map[string]interface{})
+	return &c
 }
 
-// RecordTime records the time taken for one benchmarking run.
-func (c *Context) RecordTime(t time.Duration) {
-	c.histogram.RecordValue(t.Nanoseconds())
+// Timer records the time for the specified event
+func (c *Context) Timer(name string, t time.Duration) {
+	if _, ok := c.timers[name]; ok == false {
+		c.timers[name] = hdrhistogram.New(min, max, resolution)
+	}
+	c.timers[name].RecordValue(t.Nanoseconds())
+}
+
+// Incr increments a counter
+func (c *Context) Incr(name string, v int64) {
+	c.counters[name] += v
 }
 
 func (c *Context) String() string {
@@ -32,8 +46,14 @@ func (c *Context) String() string {
 	percentiles := []float64{50, 99.9, 100}
 
 	fmt.Fprintf(&buf, "Task: %d, Total runs: %d\n", c.ID, c.Iteration)
-	for _, p := range percentiles {
-		fmt.Fprintf(&buf, "%s%2.1fth percentile: %.2fms\n", prefix, p, float32(c.histogram.ValueAtQuantile(p))/1000000.0)
+	for n, h := range c.timers {
+		fmt.Fprintf(&buf, "%sTimer: %s \n", prefix, n)
+		for _, p := range percentiles {
+			fmt.Fprintf(&buf, "%s%2.1fth percentile: %.2fms\n", prefix, p, float32(h.ValueAtQuantile(p))/1000000.0)
+		}
+	}
+	for n, count := range c.counters {
+		fmt.Fprintf(&buf, "%sCounter: %s, value: %d \n", prefix, n, count)
 	}
 	return buf.String()
 }
