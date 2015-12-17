@@ -13,7 +13,7 @@ Captured metrics include:
 
 A sample run will spew similar output
 
-```
+```console
 $ go run simple.go
 Rate: 10 calls/sec, Duration: 5.00s, Concurrency: 2, Total runs: 50
   >>Timer: Latency
@@ -30,6 +30,7 @@ Bench provides a Context in each function call. Use it to
 * Pick different between urls for each call
 * Add it as a custom header for your Rest call
 * Generate different DB data
+* Store run specific values. Example connection pools.
 
 ## Usage
 
