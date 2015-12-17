@@ -120,7 +120,12 @@ func (b *Bench) String() string {
 	var buf bytes.Buffer
 	percentiles := []float64{5, 50, 99.9, 100}
 
-	fmt.Fprintf(&buf, "Duration: %2.2fs, Concurrency: %d, Total runs: %d\n", b.timeTaken.Seconds(), b.concurrentRuns, b.calls)
+	if b.rps <= 0 {
+	fmt.Fprintf(&buf, "Duration: %2.2fs, Concurrency: %d, Total runs: %d\n", b.timeTaken.Seconds(), b.concurrentRuns, b.calls)	
+	} else {
+		fmt.Fprintf(&buf, "Rate: %d calls/sec, Duration: %2.2fs, Concurrency: %d, Total runs: %d\n", b.rps, b.timeTaken.Seconds(), b.concurrentRuns, b.calls)
+	}
+	
 
 	for n, h := range b.timers {
 		fmt.Fprintf(&buf, "%s>>Timer: %s \n", prefix, n)
