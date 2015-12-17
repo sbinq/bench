@@ -1,20 +1,35 @@
 
 # Bench [![Build Status](https://travis-ci.org/chirayu/bench.svg?branch=master)](https://travis-ci.org/chirayu/bench) [![GoDoc](http://godoc.org/github.com/chirayu/bench?status.png)](http://godoc.org/github.com/chirayu/bench)
 
-**Bench** is a golang package to help speed up benchmarking projects. You can use it to do a quick benchmark of your database, queue or http server.
+**Bench** is a golang package to help speed up benchmarking projects. It can be used to do benchmark your database, queue or rest server. 
 
 ## Features
 
-Bench repeatedly calls a function with the specificied concurrency. For each call, it captures metrics, which it then summarizes at the end of the run. Metrics captured include:
+Bench can call a function **repeatedly** or at a **uniform rate**  with the specificied concurrency. For each call, the called function can captures metrics, which are summarized at the end of the run.
 
-* latency for percentiles. By default it displays 50th, 90th and 99th percentiles. 
-* calls per second 
+Captured metrics include:
+* Timers. Use it to capture latency of functions, I/O bound calls.
+* Counters. 
 
-Bench provides a Context for each function call, which contains a counter that is incremented on each call. Use it to
+A sample run will spew similar output
+
+```
+$ go run simple.go
+Rate: 10 calls/sec, Duration: 5.00s, Concurrency: 2, Total runs: 50
+  >>Timer: Latency
+    5.0th percentile: 0.59ms
+    50.0th percentile: 0.67ms
+    99.9th percentile: 0.82ms
+    100.0th percentile: 0.82ms
+  >>Counter: Call Counter
+    Value: 50
+```
+
+Bench provides a Context in each function call. Use it to
 
 * Pick different between urls for each call
 * Add it as a custom header for your Rest call
-* Use it to generate different DB data
+* Generate different DB data
 
 ## Usage
 
