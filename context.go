@@ -49,7 +49,7 @@ func (c *Context) String() string {
 	for n, h := range c.timers {
 		fmt.Fprintf(&buf, "%sTimer: %s \n", prefix, n)
 		for _, p := range percentiles {
-			fmt.Fprintf(&buf, "%s%2.1fth percentile: %.2fms\n", prefix, p, float32(h.ValueAtQuantile(p))/1000000.0)
+			fmt.Fprintf(&buf, "%s%2.1fth percentile: %.2fms\n", prefix, p, float64(h.ValueAtQuantile(p))/1000000.0)
 		}
 	}
 	for n, count := range c.counters {
