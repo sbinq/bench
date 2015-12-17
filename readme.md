@@ -20,7 +20,7 @@ Bench provides a Context for each function call, which contains a counter that i
 
 Bench is easy to integrate with your code. This code benchmarks a http server with a concurrency of 10 for 10 seconds.
 
-```
+```golang
 func benchmarkMe(c *bench.Context) {
 	start := time.Now()
 	resp, err := http.Get("http://www.flipkart.com")
