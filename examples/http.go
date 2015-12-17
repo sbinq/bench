@@ -31,7 +31,7 @@ func f(c *bench.Context) {
 }
 
 func main() {
-	b := bench.NewBench(10, time.Second*10, f)
-	b.UniformRun(100)
+	b := bench.NewBench(10, time.Second*10, 10, f)
+	b.Run()
 	fmt.Printf("%s", b)
 }

@@ -7,25 +7,25 @@ import (
 	"time"
 )
 
-func f(c *bench.Context) {
+func delayedFn(c *bench.Context) {
+	t := time.Now()
 	time.Sleep(100 * time.Millisecond)
-	c.Timer("Latency", time.Duration(c.Iteration) * time.Millisecond)
+	c.Timer("Latency", time.Since(t))
 	c.Incr("Call Counter", 1)
 }
 
-func f1(c *bench.Context) {
-	c.Timer("Latency", time.Duration(c.Iteration) * time.Millisecond)
+func quickFn(c *bench.Context) {
+	t := time.Now()
+	for i := 0; i < 1000*1000; i++ {
+	}
+	c.Timer("Latency", time.Since(t))
 	c.Incr("Call Counter", 1)
+	//c.Incr("Another Call Counter", 10)
 }
 
 func main() {
-	// run at full steam
-	// b := bench.NewBench(1, time.Second*2, f)
-	// b.Run()
-	// fmt.Printf("%s", b)
-	
-	// run at the provided rps
-	b1 := bench.NewBench(2, time.Second*5, f)
-	b1.UniformRun(10)
+ 	// run at the provided rps
+	b1 := bench.NewBench(2, time.Second*5, 10, quickFn)
+	b1.Run()
 	fmt.Printf("%s", b1)
 }
