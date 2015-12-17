@@ -12,9 +12,9 @@ type TokenStream struct {
 } 
 
 // Stop stops the token stream
+// It doesn't close channel S to prevent a read from the channel succeeding incorrectly.
 func (t *TokenStream) Stop() {
 	close(t.closeCh)
-	close(t.S)
 }
 
 // TODO: generation is at a constant rate and doesn't accomodate spikes.
