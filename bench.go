@@ -21,8 +21,10 @@ type Bench struct {
 	// context for individual runs
 	runContexts []*Context
 
-	// histogram for the benchmarking run
-	histogram *hdrhistogram.Histogram
+	// aggregated metrics
+	timers   map[string]*hdrhistogram.Histogram
+	counters map[string]int64
+
 	// total calls made to each task
 	calls int64
 	// time taken for the full run
@@ -35,8 +37,10 @@ func NewBench(concurrency int, duration time.Duration, toBenchmark func(*Context
 		concurrentRuns: concurrency,
 		duration:       duration,
 		toBenchmark:    toBenchmark,
-		histogram:      hdrhistogram.New(min, max, resolution),
 	}
+
+	b.timers = make(map[string]*hdrhistogram.Histogram)
+	b.counters = make(map[string]int64)
 
 	for i := 0; i < b.concurrentRuns; i++ {
 		b.runContexts = append(b.runContexts, newContext(i+1))
@@ -47,22 +51,28 @@ func NewBench(concurrency int, duration time.Duration, toBenchmark func(*Context
 
 // Run the benchmark
 func (b *Bench) Run() {
+
+	// Only run it once
+	if b.calls != 0 {
+		return
+	}
+
 	var wg sync.WaitGroup
 	start := time.Now()
 
 	ctx, _ := context.WithTimeout(context.Background(), b.duration)
 
 	for i := 1; i <= b.concurrentRuns; i++ {
-		wg.Add(1)
 		go func(ctx context.Context, runContext *Context) {
+			wg.Add(1)
 			defer wg.Done()
 
 			for j := 1; ; j++ {
-				runContext.Iteration = int64(j)
 				select {
 				case <-ctx.Done():
 					return
 				default:
+					runContext.Iteration = int64(j)
 					b.toBenchmark(runContext)
 				}
 			}
@@ -70,14 +80,90 @@ func (b *Bench) Run() {
 	}
 
 	wg.Wait()
+	b.timeTaken = time.Since(start)
 
-	// merge task specific data
-	for i := 0; i < b.concurrentRuns; i++ {
-		b.histogram.Merge(b.runContexts[i].histogram)
-		b.calls += b.runContexts[i].Iteration
+	b.aggregate()
+}
+
+// UniformRun calls the function at the specified rate
+func (b *Bench) UniformRun(rps int) {
+
+	// Only run it once
+	if b.calls != 0 {
+		return
 	}
 
+	var wg sync.WaitGroup
+	tokens := make(chan bool, 10*rps)
+	defer close(tokens)
+
+	ctx, _ := context.WithTimeout(context.Background(), b.duration)
+	ticker := time.NewTicker(time.Second / time.Duration(rps))
+	defer ticker.Stop()
+
+	start := time.Now()
+
+	// generate a queue of events for consumption by the runs
+	go func(ctx context.Context, ticker *time.Ticker) {
+		wg.Add(1)
+		defer wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				tokens <- true
+			}
+		}
+	}(ctx, ticker)
+
+	// start the runs
+	for i := 1; i <= b.concurrentRuns; i++ {
+		wg.Add(1)
+		go func(ctx context.Context, runContext *Context) {
+			defer wg.Done()
+
+			for j := 1; ; j++ {
+				select {
+				case <-ctx.Done():
+					return
+				case <-tokens:
+					runContext.Iteration = int64(j)
+					b.toBenchmark(runContext)
+				}
+			}
+		}(ctx, b.runContexts[i-1])
+	}
+
+	wg.Wait()
 	b.timeTaken = time.Since(start)
+
+	b.aggregate()
+}
+
+// aggregate run contexts
+func (b *Bench) aggregate() {
+
+	// aggregate timer metrics
+	for n := range b.runContexts[0].timers {
+		t := hdrhistogram.New(min, max, resolution)
+		b.timers[n] = t
+		for i := 0; i < b.concurrentRuns; i++ {
+			t.Merge(b.runContexts[i].timers[n])
+		}
+	}
+
+	// aggregate counters
+	for n := range b.runContexts[0].counters {
+		for i := 0; i < b.concurrentRuns; i++ {
+			b.counters[n] += b.runContexts[i].counters[n]
+		}
+	}
+
+	// aggregate call counts
+	for i := 0; i < b.concurrentRuns; i++ {
+		b.calls += b.runContexts[i].Iteration
+	}
 }
 
 // String converts the output of the bench into a printable form
@@ -87,9 +173,16 @@ func (b *Bench) String() string {
 	percentiles := []float64{50, 99.9, 100}
 
 	fmt.Fprintf(&buf, "Duration: %2.2fs, Concurrency: %d, Total runs: %d\n", b.timeTaken.Seconds(), b.concurrentRuns, b.calls)
-	for _, p := range percentiles {
-		fmt.Fprintf(&buf, "%s%2.1fth percentile: %.2fms\n", prefix, p, float32(b.histogram.ValueAtQuantile(p))/1000000.0)
+
+	for n, h := range b.timers {
+		fmt.Fprintf(&buf, "%s>>Timer: %s \n", prefix, n)
+		for _, p := range percentiles {
+			fmt.Fprintf(&buf, "%s%s%2.1fth percentile: %.2fms\n", prefix, prefix, p, float32(h.ValueAtQuantile(p))/1000000.0)
+		}
 	}
-	fmt.Fprintf(&buf, "%s%d calls in %.2fs\n", prefix, b.calls, b.timeTaken.Seconds())
+	for n, count := range b.counters {
+		fmt.Fprintf(&buf, "%s>>Counter: %s\n", prefix, n)
+		fmt.Fprintf(&buf, "%s%sValue: %d \n", prefix, prefix, count)
+	}
 	return buf.String()
 }
