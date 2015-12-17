@@ -94,7 +94,7 @@ func (b *Bench) aggregate() {
 
 	// aggregate timer metrics
 	for n := range b.runContexts[0].timers {
-		t := hdrhistogram.New(min, max, resolution)
+		t := hdrhistogram.New(min, max, precision)
 		b.timers[n] = t
 		for i := 0; i < b.concurrentRuns; i++ {
 			t.Merge(b.runContexts[i].timers[n])
@@ -146,7 +146,7 @@ func continuous(ctx context.Context, runContext *Context, wg *sync.WaitGroup, fn
 			return
 		default:
 			runContext.Iteration = int64(j)
-			fn(runContext)			
+			fn(runContext)
 		}
 	}
 }

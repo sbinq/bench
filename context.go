@@ -30,7 +30,7 @@ func newContext(id int) *Context {
 // Timer records the time for the specified event
 func (c *Context) Timer(name string, t time.Duration) {
 	if _, ok := c.timers[name]; ok == false {
-		c.timers[name] = hdrhistogram.New(min, max, resolution)
+		c.timers[name] = hdrhistogram.New(min, max, precision)
 	}
 	c.timers[name].RecordValue(t.Nanoseconds())
 }
