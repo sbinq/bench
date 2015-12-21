@@ -67,5 +67,5 @@ func main() {
 
 Two features are in the offing.
 
-1. Ability to capture multiple metrics during runtime. Apart from latency, a http client may want to record data size and error codes. 
-2. Make requests at a uniform rate. This is useful when you want to see if you server can sustain a load of X per second. 
+1. Support for an initial calibration period during which metrics are ignored.
+2. Production quality http benchmarks.
