@@ -121,11 +121,10 @@ func (b *Bench) String() string {
 	percentiles := []float64{5, 50, 99.9, 100}
 
 	if b.rps <= 0 {
-	fmt.Fprintf(&buf, "Duration: %2.2fs, Concurrency: %d, Total runs: %d\n", b.timeTaken.Seconds(), b.concurrentRuns, b.calls)	
+		fmt.Fprintf(&buf, "Duration: %2.2fs, Concurrency: %d, Total runs: %d\n", b.timeTaken.Seconds(), b.concurrentRuns, b.calls)
 	} else {
 		fmt.Fprintf(&buf, "Rate: %d calls/sec, Duration: %2.2fs, Concurrency: %d, Total runs: %d\n", b.rps, b.timeTaken.Seconds(), b.concurrentRuns, b.calls)
 	}
-	
 
 	for n, h := range b.timers {
 		fmt.Fprintf(&buf, "%s>>Timer: %s \n", prefix, n)
