@@ -118,7 +118,7 @@ func (b *Bench) aggregate() {
 func (b *Bench) String() string {
 	prefix := "  "
 	var buf bytes.Buffer
-	percentiles := []float64{5, 50, 99.9, 100}
+	percentiles := []float64{5, 50, 70, 90, 95, 99, 99.9, 99.95, 99.99, 100}
 
 	if b.rps <= 0 {
 		fmt.Fprintf(&buf, "Duration: %2.2fs, Concurrency: %d, Total runs: %d\n", b.timeTaken.Seconds(), b.concurrentRuns, b.calls)
@@ -129,8 +129,9 @@ func (b *Bench) String() string {
 	for n, h := range b.timers {
 		fmt.Fprintf(&buf, "%s>>Timer: %s \n", prefix, n)
 		for _, p := range percentiles {
-			fmt.Fprintf(&buf, "%s%s%2.1fth percentile: %.2fms\n", prefix, prefix, p, float64(h.ValueAtQuantile(p))/1000000)
+			fmt.Fprintf(&buf, "%s%s%2.2fth percentile: %.2fms\n", prefix, prefix, p, float64(h.ValueAtQuantile(p))/1000000)
 		}
+		fmt.Fprintf(&buf, "%s%sMean: %.2fms\n", prefix, prefix, float64(h.Mean())/1000000.0)
 	}
 	for n, count := range b.counters {
 		fmt.Fprintf(&buf, "%s>>Counter: %s\n", prefix, n)
