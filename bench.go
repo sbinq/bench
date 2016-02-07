@@ -4,6 +4,7 @@ package bench
 import (
 	"bytes"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -93,16 +94,19 @@ func (b *Bench) Run() {
 func (b *Bench) aggregate() {
 
 	// aggregate timer metrics
-	for n := range b.runContexts[0].timers {
+	for _, n := range b.allContextsKeys(timerKeys) {
 		t := hdrhistogram.New(min, max, precision)
 		b.timers[n] = t
 		for i := 0; i < b.concurrentRuns; i++ {
-			t.Merge(b.runContexts[i].timers[n])
+			otherTimer, ok := b.runContexts[i].timers[n]
+			if ok {
+				t.Merge(otherTimer)
+			}
 		}
 	}
 
 	// aggregate counters
-	for n := range b.runContexts[0].counters {
+	for _, n := range b.allContextsKeys(counterKeys) {
 		for i := 0; i < b.concurrentRuns; i++ {
 			b.counters[n] += b.runContexts[i].counters[n]
 		}
@@ -168,4 +172,21 @@ func onToken(ctx context.Context, runContext *Context, wg *sync.WaitGroup, ts *T
 			fn(runContext)
 		}
 	}
+}
+
+func (b *Bench) allContextsKeys(getCtxKeys func(c *Context) []string) []string {
+	m := make(map[string]struct{})
+	for _, c := range b.runContexts {
+		for _, k := range getCtxKeys(c) {
+			m[k] = struct{}{}
+		}
+	}
+
+	ks := make([]string, 0)
+	for k := range m {
+		ks = append(ks, k)
+	}
+
+	sort.Strings(ks)
+	return ks
 }

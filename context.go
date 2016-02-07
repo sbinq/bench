@@ -57,3 +57,19 @@ func (c *Context) String() string {
 	}
 	return buf.String()
 }
+
+func timerKeys(c *Context) []string {
+	ks := make([]string, 0)
+	for k := range c.timers {
+		ks = append(ks, k)
+	}
+	return ks
+}
+
+func counterKeys(c *Context) []string {
+	ks := make([]string, 0)
+	for k := range c.counters {
+		ks = append(ks, k)
+	}
+	return ks
+}
